@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
 import { Octokit } from "@octokit/rest";
+import { currentPrUrl } from "./githubPrUrls";
 
 export const backfill = internalAction({
   args: {},
@@ -28,7 +29,6 @@ export const backfillFetcher = internalMutation({
   handler: async (ctx) => {
     return await ctx.db
       .query("release_prs")
-      .withIndex("by_creation_time")
       .order("desc")
       .collect();
   },
@@ -43,7 +43,7 @@ export const backfillWriter = internalMutation({
   handler: async (ctx, args) => {
     return await ctx.db.patch(args.id, {
       requestor: args.author,
-      approver: args.firstApprover,
+      ...(args.firstApprover === undefined ? {} : { approver: args.firstApprover }),
     });
   },
 });
@@ -52,8 +52,8 @@ async function fetchPRDetails(prUrl: string) {
   const token = process.env.GITHUB_READ_TOKEN;
   const octokit = new Octokit({ auth: token });
 
-  const match = prUrl.match(
-    /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/
+  const match = currentPrUrl(prUrl).match(
+    /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)$/
   );
   if (!match) {
     throw new Error("Invalid URL");

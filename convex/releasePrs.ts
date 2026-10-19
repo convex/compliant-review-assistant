@@ -1,6 +1,19 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
+import { currentPrUrl, equivalentPrUrls } from "./githubPrUrls";
+
+async function findReleasePrByUrl(ctx: QueryCtx, url: string) {
+  for (const candidate of equivalentPrUrls(url)) {
+    const pr = await ctx.db
+      .query("release_prs")
+      .withIndex("byUrl", (q) => q.eq("url", candidate))
+      .unique();
+    if (pr) return pr;
+  }
+  return null;
+}
 
 export const updateLatestReleasePR = internalMutation({
   // Validators for arguments.
@@ -9,16 +22,11 @@ export const updateLatestReleasePR = internalMutation({
     latestPrUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    const latest = await ctx.db
-      .query("release_prs")
-      .withIndex("by_creation_time")
-      .order("desc")
-      .first();
-    if (latest?.url == args.latestPrUrl) {
+    if (await findReleasePrByUrl(ctx, args.latestPrUrl)) {
       return;
     }
     await ctx.db.insert("release_prs", {
-      url: args.latestPrUrl,
+      url: currentPrUrl(args.latestPrUrl),
       requestor: args.requestor,
     });
 
@@ -34,10 +42,7 @@ export const markApproved = internalMutation({
     prUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    const releasePr = await ctx.db
-      .query("release_prs")
-      .withIndex("byUrl", (q) => q.eq("url", args.prUrl))
-      .unique();
+    const releasePr = await findReleasePrByUrl(ctx, args.prUrl);
     if (!releasePr) return;
 
     if (releasePr.approver) {
@@ -66,7 +71,6 @@ export const getLatestReleasePR = internalQuery({
   handler: async (ctx) => {
     return ctx.db
       .query("release_prs")
-      .withIndex("by_creation_time")
       .order("desc")
       .first();
   },

@@ -32,11 +32,15 @@ export const handleGithubPullRequestWebhook = httpAction(
       });
     } else if (githubEvent === "pull_request") {
       const json = JSON.parse(payload);
+      const pr = json.pull_request;
+      const owner = pr.base.repo.owner.login;
       if (
         json.action === "opened" &&
-        json.pull_request.base.label === "get-convex:release" &&
-        json.pull_request.head.label === "get-convex:main" &&
-        json.pull_request.user?.login
+        (owner === "convex" || owner === "get-convex") &&
+        pr.base.ref === "release" &&
+        pr.head.ref === "main" &&
+        pr.head.repo?.id === pr.base.repo.id &&
+        pr.user?.login
       ) {
         await runMutation(internal.releasePrs.updateLatestReleasePR, {
           requestor: json.pull_request.user.login,

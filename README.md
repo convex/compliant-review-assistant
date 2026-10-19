@@ -20,3 +20,13 @@ Then:
 3. Paste your publishable key as `VITE_CLERK_PUBLISHABLE_KEY="<your publishable key>"` to the `.env.local` file in this directory.
 
 If you want to sync Clerk user data via webhooks, check out this [example repo](https://github.com/thomasballinger/convex-clerk-users-table/).
+
+## Backend checks
+
+Run `npm ci`, then `npm test` and `npm run typecheck:backend`.
+The tests run the Convex functions and HTTP routes in memory with GitHub and
+Vestabuddy mocked; they do not require deployment credentials or send notifications.
+
+GitHub PRs from `convex` and historical `get-convex` webhook deliveries are supported.
+Stored PR URLs under either organization match the same PR, so existing rows do
+not need a data migration. Redirects and backfill API requests use `convex`.
