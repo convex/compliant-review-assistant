@@ -1,19 +1,24 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
-import { currentPrUrl, equivalentPrUrls } from "./githubPrUrls";
 
-async function findReleasePrByUrl(ctx: QueryCtx, url: string) {
-  for (const candidate of equivalentPrUrls(url)) {
-    const pr = await ctx.db
-      .query("release_prs")
-      .withIndex("byUrl", (q) => q.eq("url", candidate))
-      .unique();
-    if (pr) return pr;
-  }
-  return null;
-}
+export const migrateGithubOrg = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let updated = 0;
+    for (const pr of await ctx.db.query("release_prs").collect()) {
+      const url = pr.url.replace(
+        /^https:\/\/github\.com\/get-convex\//,
+        "https://github.com/convex/"
+      );
+      if (url !== pr.url) {
+        await ctx.db.patch(pr._id, { url });
+        updated++;
+      }
+    }
+    return { updated };
+  },
+});
 
 export const updateLatestReleasePR = internalMutation({
   // Validators for arguments.
@@ -22,11 +27,16 @@ export const updateLatestReleasePR = internalMutation({
     latestPrUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    if (await findReleasePrByUrl(ctx, args.latestPrUrl)) {
+    const latest = await ctx.db
+      .query("release_prs")
+      .withIndex("by_creation_time")
+      .order("desc")
+      .first();
+    if (latest?.url == args.latestPrUrl) {
       return;
     }
     await ctx.db.insert("release_prs", {
-      url: currentPrUrl(args.latestPrUrl),
+      url: args.latestPrUrl,
       requestor: args.requestor,
     });
 
@@ -42,7 +52,10 @@ export const markApproved = internalMutation({
     prUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    const releasePr = await findReleasePrByUrl(ctx, args.prUrl);
+    const releasePr = await ctx.db
+      .query("release_prs")
+      .withIndex("byUrl", (q) => q.eq("url", args.prUrl))
+      .unique();
     if (!releasePr) return;
 
     if (releasePr.approver) {
@@ -71,6 +84,7 @@ export const getLatestReleasePR = internalQuery({
   handler: async (ctx) => {
     return ctx.db
       .query("release_prs")
+      .withIndex("by_creation_time")
       .order("desc")
       .first();
   },
