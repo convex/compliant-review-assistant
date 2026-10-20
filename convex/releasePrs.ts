@@ -2,6 +2,24 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 
+export const migrateGithubOrg = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let updated = 0;
+    for (const pr of await ctx.db.query("release_prs").collect()) {
+      const url = pr.url.replace(
+        /^https:\/\/github\.com\/get-convex\//,
+        "https://github.com/convex/"
+      );
+      if (url !== pr.url) {
+        await ctx.db.patch(pr._id, { url });
+        updated++;
+      }
+    }
+    return { updated };
+  },
+});
+
 export const updateLatestReleasePR = internalMutation({
   // Validators for arguments.
   args: {

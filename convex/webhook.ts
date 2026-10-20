@@ -34,8 +34,8 @@ export const handleGithubPullRequestWebhook = httpAction(
       const json = JSON.parse(payload);
       if (
         json.action === "opened" &&
-        json.pull_request.base.label === "get-convex:release" &&
-        json.pull_request.head.label === "get-convex:main" &&
+        json.pull_request.base.label === "convex:release" &&
+        json.pull_request.head.label === "convex:main" &&
         json.pull_request.user?.login
       ) {
         await runMutation(internal.releasePrs.updateLatestReleasePR, {
